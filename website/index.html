@@ -1,14 +1,43 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="main.js" defer></script>
-  </head>
-  <body>
-    <button id="verify-btn">Zweryfikuj</button>
-  </body>
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gov.pl - Serwis Rzeczypospolitej Polskiej</title>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header>
+    <nav>
+      <div class="navbar-left">
+        <div class="hamburger-button">
+          <img src="./Assets/svg/solar_hamburger-menu-linear.svg" alt="Menu" width="35">
+        </div>
+        
+        <div>
+          <img src="./Assets/svg/herb_polski.svg" width="37"/>
+          <a href="https://www.gov.pl/">gov.pl</a>
+        </div>
+
+        <div class="vertical red-line"></div>
+
+        <p>Serwis Rzeczypospolitej Polskiej</p>
+      </div>
+
+      <button class="verify-btn" id="verify-btn">Zweryfikuj stronę! <img src="./Assets/svg/qr_code_icon.svg"/></button>
+
+      <div class="navbar-right">
+        <button class="login-btn"><img class="user-icon" src="./Assets/svg/user_logo.svg"/>Zaloguj</button>
+        <div class="vertical grey-line"></div>
+        <img src="./Assets/svg/eu-center-pl.svg" width="80"/>
+      </div>
+    </nav>
+  </header>
+
+</body>
 </html>
