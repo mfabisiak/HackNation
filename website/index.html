@@ -6,6 +6,7 @@
   <title>Gov.pl - Serwis Rzeczypospolitej Polskiej</title>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/svg+xml" href="./Assets/svg/herb_polski.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -21,7 +22,7 @@
         </div>
         
         <div>
-          <img src="./Assets/svg/herb_polski.svg" width="37"/>
+          <img class="polish-crest" src="./Assets/svg/herb_polski.svg" width="37"/>
           <a href="https://www.gov.pl/">gov.pl</a>
         </div>
 
@@ -39,6 +40,65 @@
       </div>
     </nav>
   </header>
+
+
+  <div class="layout-container">
+    <aside class="sidebar">
+      <ul>
+        <li class="active">Strona główna</li>
+        <li>Rada Ministrów</li>
+        <li>Kancelaria Premiera</li>
+        <li>Ministerstwa</li>
+        <li>Urzędy, instytucje <br>i placówki RP</li>
+        <hr>
+        <li class="icon-item"><img src="https://placehold.co/20x20/transparent/png" alt=""> Usługi dla obywatela</li>
+        <li class="icon-item"><img src="https://placehold.co/20x20/transparent/png" alt=""> Usługi dla przedsiębiorcy</li>
+        <li class="icon-item"><img src="https://placehold.co/20x20/transparent/png" alt=""> Usługi dla urzędnika</li>
+        <li class="icon-item"><img src="https://placehold.co/20x20/transparent/png" alt=""> Usługi dla rolnika</li>
+        <hr>
+        <li>Profil zaufany</li>
+        <li>Baza wiedzy</li>
+        <li>Serwis Służby Cywilnej</li>
+      </ul>
+    </aside>
+
+    <main class="main-content">
+      <section class="hero-banner">
+        <div class="hero-text">
+          <h1>Załatwiaj sprawy urzędowe</h1>
+          <h2>przez internet, bezpiecznie i wygodnie!</h2>
+          
+          <div class="search-container">
+            <input type="text" placeholder="Szukaj usług, informacji, wiadomości">
+            <button>Szukaj</button>
+          </div>
+        </div>
+        
+        <div class="hero-promo-placeholder">
+          <div class="promo-box">
+            <div style="font-size: 40px; margin-bottom: 10px;">📝</div>
+            <h3>Podpisz dokument elektronicznie</h3>
+            <a href="#">Dowiedz się więcej ></a>
+          </div>
+        </div>
+      </section>
+
+      <div class="tabs-placeholder">
+        <div class="tab active">DLA OBYWATELA</div>
+        <div class="tab">DLA PRZEDSIĘBIORCY</div>
+        <div class="tab">DLA URZĘDNIKA</div>
+        <div class="tab">DLA ROLNIKA</div>
+      </div>
+
+      <div class="info-alert">
+        <div class="alert-icon">ℹ️</div>
+        <div class="alert-content">
+          <h3>Uwaga na fałszywe e-maile podszywające się pod gov.pl</h3>
+          <p>Pocztą elektroniczną rozsyłane są fałszywe e-maile... (Placeholder treści ostrzeżenia)</p>
+        </div>
+      </div>
+    </main>
+  </div>
 
 </body>
 </html>
