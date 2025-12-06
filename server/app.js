@@ -1,26 +1,52 @@
-const express = require('express');
-const cors = require('cors');
-const { generateAuthenticationOptions } = require('@simplewebauthn/server');
+var express = require('express');
+var crypto = require('crypto');
+var cors = require('cors');
 
-const app = express();
-app.use(cors()); // Ważne, żeby frontend mógł gadać z backendem
+var app = express();
 
-const PORT = 3000;
-// WAŻNE: To musi być domena, na której stoi Wasza "Prawdziwa" strona.
-// Na localhost to 'localhost'. Na produkcji to np. 'moj-urzad.pl'.
+// --- KONFIGURACJA ---
+// WAŻNE: Jeśli używasz ngrok, wpisz tu domenę z ngrok (bez https://)
+// Jeśli testujesz lokalnie, zostaw 'localhost'
 const RP_ID = 'localhost';
 
-app.get('/verify-request', async (req, res) => {
-    // Generujemy opcje dla Passkeys
-    const options = await generateAuthenticationOptions({
-        rpID: RP_ID, // To jest kluczowe zabezpieczenie!
-        userVerification: 'preferred',
-        // AllowCredentials można pominąć w trybie "discoverable credential" (Passkeys)
-        // lub wpisać tu ID jeśli chcecie wymusić konkretny klucz.
-    });
+// --- MIDDLEWARE ---
+app.use(cors()); // Pozwala na zapytania z innej domeny/portu
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-    // Wysyłamy do frontu
+// --- FUNKCJA POMOCNICZA ---
+// WebAuthn wymaga Base64URL (zamiana znaków + i / na - i _)
+function bufferToBase64Url(buffer) {
+    return buffer.toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
+// --- TWOJE ZADANIE (ENDPOINT) ---
+// To jest ten request, który generuje challenge
+app.get('/signinRequest', function(req, res) {
+
+    // 1. Generujemy losowe bajty (Challenge)
+    const challengeBuffer = crypto.randomBytes(32);
+    const challengeString = bufferToBase64Url(challengeBuffer);
+
+    console.log('--- NOWE ŻĄDANIE ---');
+    console.log('Generuję challenge:', challengeString);
+
+    // 2. Tworzymy obiekt opcji
+    const options = {
+        challenge: challengeString,
+        rpId: RP_ID,         // To zabezpiecza przed phishingiem
+        allowCredentials: [], // Puste = Passkey (discoverable)
+        userVerification: 'preferred',
+        timeout: 60000,
+    };
+
+    // 3. Wysyłamy do frontendu
     res.json(options);
 });
 
-app.listen(PORT, () => console.log(Backend działa na porcie ${PORT}));
+// --- WAŻNE DLA BIN/WWW ---
+// Eksportujemy aplikację, żeby bin/www mógł ją uruchomić
+module.exports = app;
