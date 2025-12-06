@@ -10,6 +10,7 @@ body{
 nav{
     display: flex;
     justify-content: space-between;
+    position: relative;
 }
 
 .navbar-left{
@@ -33,13 +34,14 @@ nav{
 .verify-btn{
     position: absolute;
     left: 50%;
+    transform: translateX(-50%);
     border-radius: 4px;
     background-color: #E21F1F;
     font-size: 1.1rem;
-    padding: 15px;
+    padding: 15px 20px;
     color: white;
     border: none;
-    font-size: 'Roboto', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -110,4 +112,24 @@ p{
     color: #0052a5;
     width: 20px;
     height: 20px;
+}
+
+@media (max-width: 1300px){
+    .navbar-left p{
+        display: none;
+    }
+
+    .navbar-left .vertical{
+        display: none;
+    }
+
+    .login-btn {
+        display: none;
+    }
+}
+
+@media (max-width: 900px){
+    .verify-btn{
+        display: none;
+    }
 }
