@@ -1,19 +1,113 @@
+*{
+    box-sizing: border-box;
+}
+
 body{
+    padding: 0;
+    margin: 0;
+}
+
+nav{
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
 }
 
-button{
-    background-color: rgb(227, 48, 48);
+.navbar-left{
+    display: flex;
+    align-items: center;
+    gap: 25px;
+}
+
+.navbar-right{
+    display: flex;
+    align-items: center;
+    gap: 25px;
+    margin-right: 20px;
+}
+
+.hamburger-button{
+    background-color: #F1F1F1;
+    padding: 20px;
+}
+
+.verify-btn{
+    position: absolute;
+    left: 50%;
+    border-radius: 4px;
+    background-color: #E21F1F;
+    font-size: 1.1rem;
+    padding: 15px;
     color: white;
-    font-size: 2rem;
-    padding: 10px;
+    border: none;
+    font-size: 'Roboto', sans-serif;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 5px;
+    width: 220px;
+    height: 55px;
+    transition: transform 0.25s ease;
 }
 
-button:hover{
+.verify-btn:hover{
     cursor: pointer;
+    transform: translateY(-2px);
+    background-color: hsla(0, 77%, 50%, 0.95);
 }
 
-button:active{
-    background-color: rgb(241, 136, 136);
+.navbar-left div{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+a{
+    color: black;
+    text-decoration: none;
+    font-size: 1.6rem;
+    font-weight: 900;
+    font-family: "Open Sans";
+}
+
+a:hover{
+    text-decoration: underline;
+}
+
+p{
+    font-family: 'Roboto';
+}
+
+.vertical{
+    width: 2px;
+    height: 45px;
+}
+
+.red-line{
+    background-color: #E21F1F;
+}
+
+.grey-line{
+    background-color: rgb(237, 237, 237);
+}
+
+.login-btn{
+    padding: 10px 10px;
+    width: 105px;
+    border-color: #0052a5;
+    border-radius: 0.25rem;
+    color: #0052a5;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: "Roboto", sans-serif;
+    font-size: 1rem;
+    font-weight: 500;
+    background-color: white;
+}
+
+.user-icon{
+    color: #0052a5;
+    width: 20px;
+    height: 20px;
 }
