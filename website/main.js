@@ -1,16 +1,35 @@
 const verifyBtn = document.getElementById("verify-btn");
+const registerBtn = document.getElementById("register-btn")
 
 async function verify(){
-    console.log("Verify sent");
-    navigator.credentials.get({
-        publicKey: {
-            challenge: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 0]),
+    console.log("Verifying...");
 
-            timeout: 60000,
+    const _options = await fetch("http://localhost:3000/signinRequest");
 
-            userVerification: "preferred"
-        }
+    const decoded_options = await _options.json();
+
+    const options = PublicKeyCredential.parseRequestOptionsFromJSON(decoded_options);
+    console.log(options)
+
+    const credential = await navigator.credentials.get({
+        publicKey: options
+
     })
 }
 
+async function registerKey() {
+    const _options = await fetch("http://localhost:3000/registerRequest");
+
+    const decoded_options = await _options.json();
+
+    const options = PublicKeyCredential.parseCreationOptionsFromJSON(decoded_options);
+
+    const credential = await navigator.credentials.create({
+        publicKey: options
+    })
+
+}
+
 verifyBtn.addEventListener("click", verify);
+
+registerBtn.addEventListener("click", registerKey);
