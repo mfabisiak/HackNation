@@ -1,50 +1,66 @@
 const verifyBtn = document.getElementById("verify-btn");
-// const registerBtn = document.getElementById("register-btn")
+const registerBtn = document.getElementById("register-btn");
 
-function arrayBufferToBase64Url(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+const { startAuthentication, startRegistration } = SimpleWebAuthnBrowser;
+
+
+verifyBtn.addEventListener('click', async () => {
+    // Resetujemy UI i blokujemy przycisk
+    verifyBtn.disabled = true;
+
+    try {
+        // 1. Pobierz opcje generowania (challenge) z serwera
+        // Nie wysyłamy username, bo to logowanie "Resident Key"
+        const optionsResp = await fetch('http://localhost:3005/login/options');
+        const options = await optionsResp.json();
+
+        // 2. Przekaż opcje do przeglądarki (to wywoła okno systemowe/biometrię)
+        // Przeglądarka sprawdzi, czy ma klucze pasujące do domeny (rpID)
+        const authResponse = await startAuthentication(options);
+
+        // 3. Wyślij podpisany rezultat z powrotem do serwera w celu weryfikacji
+        const verifyResp = await fetch('http://localhost:3005/login/verify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(authResponse),
+        });
+
+        await verifyResp.json();
+
+
+    } catch (error) {
+        console.error('Błąd logowania:', error);
+    } finally {
+        // Odblokuj przycisk niezależnie od wyniku
+        verifyBtn.disabled = false;
     }
-    const base64 = btoa(binary);
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
+});
 
-async function verify(){
-    console.log("Verifying...");
 
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
+registerBtn?.addEventListener('click', async () => {
+    registerBtn.disabled = true;
 
-    const decoded_options = {
-        allowCredentials: [],
-        challenge: arrayBufferToBase64Url(challenge.buffer),
-        rpId: "localhost",
-        timeout: 60000
+    try {
+        const optionsResp = await fetch('http://localhost:3005/register/options');
+        const options = await optionsResp.json();
+        const attResponse = await startRegistration(options);
+        const verifyResp = await fetch('http://localhost:3005/register/verify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(attResponse),
+        });
+
+        await verifyResp.json();
+    } catch (error) {
+        console.error('Błąd rejestracji:', error);
+    } finally {
+        registerBtn.disabled = false;
     }
+});
 
-    const options = PublicKeyCredential.parseRequestOptionsFromJSON(decoded_options);
-    console.log(options)
-
-    await navigator.credentials.get({
-        publicKey: options
-
-    })
-}
-
-async function registerKey() {
-    const _options = await fetch("http://localhost:3000/registerRequest");
-
-    const decoded_options = await _options.json();
-
-    const options = PublicKeyCredential.parseCreationOptionsFromJSON(decoded_options);
-
-    const credential = await navigator.credentials.create({
-        publicKey: options
-    })
-
-}
-
-verifyBtn.addEventListener("click", verify);
 
 // registerBtn.addEventListener("click", registerKey);

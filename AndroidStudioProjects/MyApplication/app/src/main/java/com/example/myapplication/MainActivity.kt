@@ -1,16 +1,18 @@
 package com.example.myapplication
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.camera.core.*
@@ -43,9 +45,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import com.example.myapplication.passkey.PasskeyRepository
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
-import java.net.URL
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
 // --- KONFIGURACJA KOLORÓW (STYL mOBYWATEL) ---
@@ -55,41 +58,35 @@ val ColorGovBg = Color(0xFFF5F6F7)   // Szare tło
 val ColorSuccess = Color(0xFF007E33) // Ciemna zieleń
 val ColorError = Color(0xFFCC0000)   // Ciemna czerwień
 
-// --- LOGIKA BAZY DANYCH (Binaryzacja: Tylko Bezpieczne lub Niebezpieczne) ---
+// --- REJESTR DOMEN (dla ekranu listy) ---
 object TrustedRegistry {
     val domains = listOf(
-        // --- DANE Z TWOJEGO PLIKU JSON ---
         "100sekund.gov.pl", "100sekundwmuzeum.gov.pl", "1920.gov.pl", "20lat.gov.pl",
         "20latwue.gov.pl", "aan.gov.pl", "abm.gov.pl", "abw.gov.pl", "ac.gov.pl",
         "ade.gov.pl", "afs.gov.pl", "agad.gov.pl", "aids.gov.pl", "ai.gov.pl",
         "akademiacez.gov.pl", "akademiakopernikanska.gov.pl", "ak.gov.pl",
         "aktywnyrodzic.gov.pl", "aleksandrowkuj.sr.gov.pl", "ank.gov.pl",
-        // --- KLUCZOWE USŁUGI ---
         "gov.pl", "podatki.gov.pl", "pacjent.gov.pl", "mobywatel.gov.pl",
         "epuap.gov.pl", "profil-zaufany.pl", "zus.pl", "bip.gov.pl", "sejm.gov.pl",
         "prezydent.pl", "premier.gov.pl", "otwartedane.gov.pl", "dane.gov.pl",
         "cert.pl", "mf.gov.pl", "mswia.gov.pl", "men.gov.pl", "mz.gov.pl"
     )
-
-    fun checkDomain(url: String): VerificationResult {
-        return try {
-            val host = if (url.startsWith("http")) URL(url).host else url
-            val cleanHost = host.removePrefix("www.").lowercase()
-
-            // Uproszczona logika: Jeśli jest w bazie LUB ma końcówkę .gov.pl -> ZIELONY
-            val isSafe = domains.any { trusted -> cleanHost == trusted || cleanHost.endsWith(".$trusted") } || cleanHost.endsWith(".gov.pl")
-
-            if (isSafe) VerificationResult.SAFE else VerificationResult.DANGER
-        } catch (e: Exception) {
-            VerificationResult.DANGER // Błąd parsowania to potencjalny atak
-        }
-    }
 }
 
-enum class VerificationResult { SAFE, DANGER } // Usunięto WARNING
+// --- WALIDACJA KODÓW FIDO ---
+private const val FIDO_PREFIX = "FIDO:/"
+
+enum class VerificationResult { PASSKEY, INVALID }
+enum class PasskeyStatus { NOT_SENT, PENDING, SUCCESS, FAILURE }
 enum class Screen { HOME, SCANNER, RESULT, REGISTRY_LIST }
 
-data class ScanResultData(val url: String, val status: VerificationResult)
+sealed class PasskeyRegistrationState {
+    object Loading : PasskeyRegistrationState()
+    object Success : PasskeyRegistrationState()
+    data class Error(val message: String) : PasskeyRegistrationState()
+}
+
+data class ScanResultData(val payload: String, val status: VerificationResult, val passkeyStatus: PasskeyStatus = PasskeyStatus.NOT_SENT)
 data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 class MainActivity : ComponentActivity() {
@@ -105,12 +102,42 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun HackNationApp() {
-    var currentScreen by remember { mutableStateOf(Screen.HOME) }
-    var scanResult by remember { mutableStateOf(ScanResultData("", VerificationResult.DANGER)) }
-    //var currentScreen by remember { mutableStateOf(Screen.RESULT) } // Startuj od wyniku
-    //var scanResult by remember { mutableStateOf(ScanResultData("gov.pl", VerificationResult.SAFE)) }
-    //var currentScreen by remember { mutableStateOf(Screen.RESULT) }
-    //var scanResult by remember { mutableStateOf(ScanResultData("oszustwo.pl", VerificationResult.DANGER)) }
+    val context = LocalContext.current
+    val passkeyRepository = remember(context.applicationContext) { PasskeyRepository(context.applicationContext) }
+    val coroutineScope = rememberCoroutineScope()
+    var passkeyRegistrationState by remember { mutableStateOf<PasskeyRegistrationState>(PasskeyRegistrationState.Loading) }
+    val demoResult = remember { ScanResultData("FIDO:/demo-passkey", VerificationResult.PASSKEY, PasskeyStatus.SUCCESS) }
+    val startOnSuccessPreview = remember { BuildConfig.DEBUG }
+    var currentScreen by remember { mutableStateOf(if (startOnSuccessPreview) Screen.RESULT else Screen.HOME) }
+    var scanResult by remember { mutableStateOf(if (startOnSuccessPreview) demoResult else ScanResultData("", VerificationResult.INVALID)) }
+
+    val passkeyLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val newStatus = when (result.resultCode) {
+            Activity.RESULT_OK -> PasskeyStatus.SUCCESS
+            Activity.RESULT_CANCELED -> PasskeyStatus.FAILURE
+            else -> PasskeyStatus.FAILURE
+        }
+        scanResult = scanResult.copy(passkeyStatus = newStatus)
+        val feedback = if (newStatus == PasskeyStatus.SUCCESS) "Android potwierdził przesłanie passkey" else "Android przerwał lub odrzucił żądanie passkey"
+        Toast.makeText(context, feedback, Toast.LENGTH_SHORT).show()
+    }
+
+    fun launchPasskeyRegistration() {
+        coroutineScope.launch {
+            passkeyRegistrationState = PasskeyRegistrationState.Loading
+            val success = passkeyRepository.registerPasskey(context)
+            passkeyRegistrationState = if (success) {
+                PasskeyRegistrationState.Success
+            } else {
+                PasskeyRegistrationState.Error("Nie udało się zainstalować passkey. Spróbuj ponownie.")
+            }
+        }
+    }
+
+    LaunchedEffect(passkeyRepository) {
+        launchPasskeyRegistration()
+    }
+
     Scaffold(
         topBar = {
             Box(
@@ -130,19 +157,28 @@ fun HackNationApp() {
             when (currentScreen) {
                 Screen.HOME -> HomeScreen(
                     onScanClick = { currentScreen = Screen.SCANNER },
-                    onRegistryClick = { currentScreen = Screen.REGISTRY_LIST }
+                    onRegistryClick = { currentScreen = Screen.REGISTRY_LIST },
+                    registrationState = passkeyRegistrationState,
+                    onRetryRegistration = { launchPasskeyRegistration() }
                 )
                 Screen.SCANNER -> CameraScreen(
                     onCodeScanned = { code ->
-                        val status = TrustedRegistry.checkDomain(code)
-                        scanResult = ScanResultData(code, status)
+                        val (status, passkeyStatus) = handleScannedPayload(context, code, passkeyLauncher)
+                        scanResult = ScanResultData(code, status, passkeyStatus)
                         currentScreen = Screen.RESULT
                     },
                     onClose = { currentScreen = Screen.HOME }
                 )
                 Screen.RESULT -> ResultScreen(
                     data = scanResult,
-                    onBack = { currentScreen = Screen.HOME }
+                    onBack = { currentScreen = Screen.HOME },
+                    onRetryPasskey = { payload ->
+                        scanResult = scanResult.copy(passkeyStatus = PasskeyStatus.PENDING)
+                        val launched = launchPasskeyIntent(context, payload, passkeyLauncher)
+                        if (!launched) {
+                            scanResult = scanResult.copy(passkeyStatus = PasskeyStatus.FAILURE)
+                        }
+                    }
                 )
                 Screen.REGISTRY_LIST -> RegistryListScreen(
                     onBack = { currentScreen = Screen.HOME }
@@ -154,7 +190,7 @@ fun HackNationApp() {
 
 // --- EKRAN 1: HOME (Centrum Akcji) ---
 @Composable
-fun HomeScreen(onScanClick: () -> Unit, onRegistryClick: () -> Unit) {
+fun HomeScreen(onScanClick: () -> Unit, onRegistryClick: () -> Unit, registrationState: PasskeyRegistrationState, onRetryRegistration: () -> Unit) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) onScanClick()
@@ -172,7 +208,8 @@ fun HomeScreen(onScanClick: () -> Unit, onRegistryClick: () -> Unit) {
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
+        PasskeyRegistrationBanner(registrationState, onRetryRegistration)
+        Spacer(modifier = Modifier.height(12.dp))
         Text("Weryfikacja autentyczności", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = ColorGovBlue, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(8.dp))
         Text("Upewnij się, że strona należy do rządu RP.", fontSize = 14.sp, color = Color.Gray, textAlign = TextAlign.Center)
@@ -318,21 +355,43 @@ fun CameraScreen(onCodeScanned: (String) -> Unit, onClose: () -> Unit) {
 
 // --- EKRAN 4: WYNIK (BEZPIECZNE vs ZAGROŻENIE) ---
 @Composable
-fun ResultScreen(data: ScanResultData, onBack: () -> Unit) {
+fun ResultScreen(data: ScanResultData, onBack: () -> Unit, onRetryPasskey: (String) -> Unit) {
     val context = LocalContext.current
-    val isSafe = data.status == VerificationResult.SAFE
+    val isFidoRequest = data.status == VerificationResult.PASSKEY
 
-    val (bgColor, icon, title, description) = if (isSafe) {
-        Quad(ColorSuccess, Icons.Default.CheckCircle, "Strona Zaufana", "Domena jest zweryfikowana i należy do administracji publicznej.")
-    } else {
-        Quad(ColorError, Icons.Default.GppBad, "Wykryto Zagrożenie!", "Ta strona nie jest oficjalnym serwisem rządowym. Nie podawaj tu żadnych danych!")
+    val hero = when {
+        isFidoRequest && data.passkeyStatus == PasskeyStatus.SUCCESS -> Quad(
+            ColorSuccess,
+            Icons.Default.CheckCircle,
+            "Strona zaufana",
+            "Android potwierdził autoryzację passkey. Możesz kontynuować logowanie."
+        )
+        !isFidoRequest -> Quad(
+            ColorError,
+            Icons.Default.GppBad,
+            "Wykryto zagrożenie!",
+            "Ten kod QR nie spełnia wymagań FIDO:/ i nie może zostać użyty."
+        )
+        data.passkeyStatus == PasskeyStatus.FAILURE -> Quad(
+            ColorError,
+            Icons.Default.GppBad,
+            "Wykryto zagrożenie!",
+            "Android odrzucił żądanie passkey – potraktuj stronę jako podrobioną."
+        )
+        else -> Quad(
+            ColorGovBlue,
+            Icons.Default.HourglassTop,
+            "Trwa weryfikacja",
+            "Żądanie passkey zostało wysłane do Androida. Poczekaj na potwierdzenie."
+        )
     }
 
-    fun openBrowser() {
-        try {
-            val fullUrl = if(data.url.startsWith("http")) data.url else "https://${data.url}"
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fullUrl)))
-        } catch (e: Exception) { Toast.makeText(context, "Błąd", Toast.LENGTH_SHORT).show() }
+    val (bgColor, icon, title, heroDescription) = hero
+    val isSuccess = hero === hero // placeholder removed below
+    val showSuccess = isFidoRequest && data.passkeyStatus == PasskeyStatus.SUCCESS
+
+    fun retryPasskey() {
+        onRetryPasskey(data.payload)
     }
 
     fun reportIncident() {
@@ -341,42 +400,96 @@ fun ResultScreen(data: ScanResultData, onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ColorGovBg)) {
-        Box(modifier = Modifier.fillMaxWidth().weight(0.45f).background(bgColor).clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp)), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(0.45f).background(bgColor).clip(
+                RoundedCornerShape(
+                    bottomStart = 30.dp,
+                    bottomEnd = 30.dp
+                )
+            ),
+            contentAlignment = Alignment.Center
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(icon, null, tint = Color.White, modifier = Modifier.size(100.dp))
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(data.url.uppercase(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.8f), modifier = Modifier.background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(50)).padding(horizontal = 16.dp, vertical = 6.dp))
+                Text(
+                    when {
+                        showSuccess -> "Kod FIDO potwierdzony"
+                        data.passkeyStatus == PasskeyStatus.FAILURE -> "Kod FIDO odrzucony"
+                        !isFidoRequest -> "Kod bez prefiksu FIDO"
+                        else -> "Oczekiwanie na odpowiedź Androida"
+                    },
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.background(
+                        Color.Black.copy(alpha = 0.2f),
+                        RoundedCornerShape(50)
+                    ).padding(horizontal = 16.dp, vertical = 6.dp)
+                )
             }
         }
 
         Column(modifier = Modifier.weight(0.55f).padding(24.dp), verticalArrangement = Arrangement.SpaceBetween) {
-            Text(description, fontSize = 16.sp, textAlign = TextAlign.Center, color = Color.DarkGray, lineHeight = 24.sp)
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
+            Text(heroDescription, fontSize = 16.sp, textAlign = TextAlign.Center, color = Color.DarkGray, lineHeight = 24.sp)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    StatusRow("Domena rządowa (.gov.pl)", isSafe)
+                    StatusRow("Prefiks FIDO:/", isFidoRequest)
                     Spacer(modifier = Modifier.height(8.dp))
-                    StatusRow("Certyfikat zaufany", isSafe)
+                    PasskeyStatusRow(data.passkeyStatus)
                 }
             }
 
             Column(modifier = Modifier.fillMaxWidth()) {
-                if (isSafe) {
-                    Button(onClick = { openBrowser() }, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = ColorSuccess), shape = RoundedCornerShape(12.dp)) {
-                        Text("Przejdź do serwisu")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(18.dp))
+                when {
+                    showSuccess -> {
+                        Button(
+                            onClick = onBack,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ColorSuccess),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Zakończ i wróć")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                        }
                     }
-                } else {
-                    Button(onClick = { reportIncident() }, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = ColorError), shape = RoundedCornerShape(12.dp)) {
-                        Icon(Icons.Default.Report, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Zgłoś próbę oszustwa")
+                    data.passkeyStatus == PasskeyStatus.PENDING || data.passkeyStatus == PasskeyStatus.NOT_SENT -> {
+                        Button(
+                            onClick = { retryPasskey() },
+                            enabled = data.passkeyStatus != PasskeyStatus.PENDING,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ColorGovBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Wyślij ponownie do Androida")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    else -> {
+                        Button(
+                            onClick = { reportIncident() },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ColorError),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Report, null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Zgłoś próbę oszustwa")
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) { Text("Wróć", color = Color.Gray) }
+                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
+                    Text("Wróć", color = Color.Gray)
+                }
             }
         }
     }
@@ -391,6 +504,40 @@ fun StatusRow(label: String, isValid: Boolean) {
     }
 }
 
+@Composable
+fun PasskeyStatusRow(status: PasskeyStatus) {
+    val (icon, tint, message) = when (status) {
+        PasskeyStatus.SUCCESS -> Triple(Icons.Default.Verified, ColorSuccess, "Kod potwierdzony – Android autoryzował passkey")
+        PasskeyStatus.FAILURE -> Triple(Icons.Default.Warning, ColorError, "Niepowodzenie – traktuj stronę jako podrobioną")
+        PasskeyStatus.PENDING -> Triple(Icons.Default.History, ColorGovBlue, "Czekamy na autoryzację Androida")
+        PasskeyStatus.NOT_SENT -> Triple(Icons.Default.HourglassEmpty, Color.Gray, "Żądanie jeszcze nie zostało wysłane")
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(message, fontSize = 14.sp)
+    }
+}
+
+fun handleScannedPayload(context: Context, rawValue: String, launcher: ActivityResultLauncher<Intent>?): Pair<VerificationResult, PasskeyStatus> {
+    return if (rawValue.startsWith(FIDO_PREFIX, ignoreCase = true)) {
+        val launched = launchPasskeyIntent(context, rawValue, launcher)
+        val status = if (launched) PasskeyStatus.PENDING else PasskeyStatus.FAILURE
+        VerificationResult.PASSKEY to status
+    } else {
+        VerificationResult.INVALID to PasskeyStatus.NOT_SENT
+    }
+}
+
+fun launchPasskeyIntent(context: Context, payload: String, launcher: ActivityResultLauncher<Intent>? = null): Boolean {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(payload)).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    return runCatching {
+        launcher?.launch(intent) ?: context.startActivity(intent)
+    }.onFailure {
+        Toast.makeText(context, "Brak aplikacji obsługującej passkey", Toast.LENGTH_LONG).show()
+    }.isSuccess
+}
+
 @OptIn(ExperimentalGetImage::class)
 fun processImageProxy(imageProxy: ImageProxy, onCodeScanned: (String) -> Unit) {
     val mediaImage = imageProxy.image
@@ -398,4 +545,28 @@ fun processImageProxy(imageProxy: ImageProxy, onCodeScanned: (String) -> Unit) {
         val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
         BarcodeScanning.getClient().process(image).addOnSuccessListener { barcodes -> barcodes.firstOrNull()?.rawValue?.let { onCodeScanned(it) } }.addOnCompleteListener { imageProxy.close() }
     } else { imageProxy.close() }
+}
+
+@Composable
+fun PasskeyRegistrationBanner(state: PasskeyRegistrationState, onRetry: () -> Unit) {
+    val (bgColor, icon, text, showRetry) = when (state) {
+        PasskeyRegistrationState.Loading -> Quad(ColorGovBlue, Icons.Default.HourglassTop, "Trwa instalowanie passkey...", false)
+        PasskeyRegistrationState.Success -> Quad(ColorSuccess, Icons.Default.Verified, "Passkey zainstalowany pomyślnie.", false)
+        is PasskeyRegistrationState.Error -> Quad(ColorError, Icons.Default.Warning, state.message, true)
+    }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = bgColor.copy(alpha = 0.15f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, bgColor),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = bgColor)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text, color = bgColor, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (showRetry) {
+                TextButton(onClick = onRetry) { Text("Ponów", color = bgColor) }
+            }
+        }
+    }
 }

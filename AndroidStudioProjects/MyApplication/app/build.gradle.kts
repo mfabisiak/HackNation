@@ -18,6 +18,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "PASSKEY_BASE_URL", "\"http://10.0.2.2:3005/\"")
+        android.buildFeatures.buildConfig = true
     }
 
     buildTypes {
@@ -68,4 +70,13 @@ dependencies {
 
     // Ikony Material Design (żeby mieć "X" do zamknięcia)
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
+
+    // Credential Manager, Retrofit/OkHttp, and JSON serialization for passkey registration
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }

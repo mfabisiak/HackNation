@@ -68,6 +68,27 @@ nav{
     background-color: hsla(0, 77%, 50%, 1);
 }
 
+.passkey-register-btn {
+    border-radius: 4px;
+    background-color: #004085;
+    font-size: 0.95rem;
+    padding: 10px 16px;
+    color: white;
+    border: none;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 600;
+    margin-right: 10px;
+}
+
+.passkey-register-btn:hover {
+    cursor: pointer;
+    background-color: #0052a5;
+}
+
+.passkey-register-btn:active {
+    background-color: #003366;
+}
+
 .polish-crest:hover{
     cursor: pointer;
 }
