@@ -40,11 +40,12 @@ nav{
     left: 50%;
     transform: translateX(-50%);
     border-radius: 4px;
-    background-color: #E21F1F;
+    border-width: 3px;
+    background-color: hsl(0, 0%, 100%);
     font-size: 1.1rem;
     padding: 15px 20px;
-    color: white;
-    border: none;
+    color: black;
+    border-color: #0052a5;
     font-family: 'Roboto', sans-serif;
     font-weight: 600;
     display: flex;
@@ -56,16 +57,20 @@ nav{
     transition: transform 0.25s ease;
 }
 
+.verify-btn img{
+    filter: invert(1);
+}
+
 .verify-btn:hover{
     cursor: pointer;
     transform: translateX(-50%) translateY(-2px);
-    background-color: hsla(0, 77%, 50%, 0.95);
+    background-color:  hsl(0, 0%, 95%);
 }
 
 .verify-btn:active{
     cursor: pointer;
     transform: translateX(-50%);
-    background-color: hsla(0, 77%, 50%, 1);
+    background-color:  hsl(0, 0%, 100%);
 }
 
 .passkey-register-btn {
@@ -329,7 +334,7 @@ p{
         display: none;
     }
 
-    .sidebar { display: none; } 
+    .sidebar { display: none; }
 
 
 }
